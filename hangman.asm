@@ -1,14 +1,6 @@
-;===========================================================
+;=========================================================== 
 ; Group 3:
-; Name: Barnuevo, Charles Lawrence
-; Bueno, Jose Emmanuel
-; Garcia, Christen Nicole 
-; Ridao, Sean Ulrich
-; Rosales, Azeckah Claire
-; Santos, Ferdinan Alexandr 
-; Solomon, Margarette Ashly
-; Description: "Ctrl-Alt-Defeat" ??? Hangman-style game 
-; 
+; Description: "Ctrl-Alt-Defeat" ? Hangman-style game 
 ;===========================================================
 
 .model small
@@ -41,6 +33,8 @@ guessMsg db 0Dh,0Ah,"Enter a letter: $"
 wrongMsg db 0Dh,0Ah,"Incorrect! System integrity weakening...$"
 rightMsg db 0Dh,0Ah,"Node repaired! Good work.$"
 winMsg   db 0Dh,0Ah,0Dh,0Ah,"SYSTEM RESTORED. UMBRELLA SAFE!$"
+alreadyMsg db 0Dh,0Ah,"You already guessed that letter!$"          ; === NEW ===
+
 winArt db 0Dh,0Ah
        db "  ____                            _         _       _   _                 ",0Dh,0Ah
        db " / ___|___  _ __   __ _ _ __ __ _| |_ _   _| | __ _| |_(_) ___  _ __  ___ ",0Dh,0Ah
@@ -56,12 +50,17 @@ loseArt db 0Dh,0Ah
         db " \____|\__,_|_| |_| |_|\___|  \___/  \_/ \___|_|   ",0Dh,0Ah,"$"
 loseMsg  db 0Dh,0Ah,0Dh,0Ah,"FIREWALL BREACHED! UMBRELLA INFECTED.$"
 maskLabel db 0Dh,0Ah,"Current Word: $"
+guessedLabel db 0Dh,0Ah,"Guessed letters: $", '$'       ; === NEW ===
 newline db 0Dh,0Ah,"$"
 
 ; new messages for one-line letter count
 openParen db " (", '$'
 letterCountNum db "0", '$'
 closeText db " letters)$", '$'
+
+; === NEW === guessed letters buffer
+guessedLetters db 26 dup('$')
+guessIndex db 0
 
 .code
 main proc
@@ -156,15 +155,34 @@ print_letter_count:
     mov al, 6
     mov [tries], al
 
+    ; reset guessed letters index
+    mov byte ptr [guessIndex], 0         ; === NEW ===
+
 game_loop:
     ; show "Current Word:"
     mov ah,09h
     mov dx, OFFSET maskLabel
     int 21h
-
     mov ah,09h
     mov dx, di
     int 21h
+
+    ; === NEW === show guessed letters
+    mov ah,09h
+    mov dx, OFFSET guessedLabel
+    int 21h
+    mov si, OFFSET guessedLetters
+    mov cl, [guessIndex]
+    mov bl, 0
+print_guessed:
+    cmp bl, cl
+    jge after_print
+    mov dl, [si+bx]
+    mov ah, 02h
+    int 21h
+    inc bl
+    jmp print_guessed
+after_print:
 
     ; prompt
     mov ah,09h
@@ -188,6 +206,28 @@ game_loop:
     ja skip_case
     sub bl,32
 skip_case:
+
+    ; === NEW === check if letter already guessed
+    mov si, OFFSET guessedLetters
+    mov cl, [guessIndex]
+    mov bh, 0
+check_repeat:
+    cmp bh, cl
+    jge not_found_repeat
+    cmp bl, [si+bx]
+    je already_guessed_letter
+    inc bh
+    jmp check_repeat
+
+already_guessed_letter:
+    mov ah,09h
+    mov dx, OFFSET alreadyMsg
+    int 21h
+    jmp game_loop    ; skip consuming try
+
+not_found_repeat:
+    mov [si+bx], bl
+    inc byte ptr [guessIndex]
 
     ; search through word and update mask
     push si
