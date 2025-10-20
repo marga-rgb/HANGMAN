@@ -1,12 +1,13 @@
 ;===========================================================
 ; Group 3:
 ; Name: Barnuevo, Charles Lawrence
+; Bueno, Jose Emmanuel
 ; Garcia, Christen Nicole 
 ; Ridao, Sean Ulrich
 ; Rosales, Azeckah Claire
 ; Santos, Ferdinan Alexandr 
 ; Solomon, Margarette Ashly
-; Description: "Ctrl-Alt-Defeat" – Hangman-style game 
+; Description: "Ctrl-Alt-Defeat" ??? Hangman-style game 
 ; 
 ;===========================================================
 
@@ -33,17 +34,34 @@ mediumHint db "Hint: Stores multiple values of same type.$"
 
 hardWord  db "ALGORITHM$"
 hardMask  db "_________$"
-hardHint  db "Hint: Step-by-step process to solve a problem.$"
+hardHint db "Hint: Step-by-step process to solve a problem.$"
 
 tries db 6
 guessMsg db 0Dh,0Ah,"Enter a letter: $"
 wrongMsg db 0Dh,0Ah,"Incorrect! System integrity weakening...$"
 rightMsg db 0Dh,0Ah,"Node repaired! Good work.$"
 winMsg   db 0Dh,0Ah,0Dh,0Ah,"SYSTEM RESTORED. UMBRELLA SAFE!$"
+winArt db 0Dh,0Ah
+       db "  ____                            _         _       _   _                 ",0Dh,0Ah
+       db " / ___|___  _ __   __ _ _ __ __ _| |_ _   _| | __ _| |_(_) ___  _ __  ___ ",0Dh,0Ah
+       db "| |   / _ \| '_ \ / _` | '__/ _` | __| | | | |/ _` | __| |/ _ \| '_ \/ __|",0Dh,0Ah
+       db "| |__| (_) | | | | (_| | | | (_| | |_| |_| | | (_| | |_| | (_) | | | \__ \",0Dh,0Ah
+       db " \____\___/|_| |_|\__, |_|  \__,_|\__|\__,_|_|\__,_|\__|_|\___/|_| |_|___/",0Dh,0Ah
+       db "                  |___/                                                   ",0Dh,0Ah,"$"
+loseArt db 0Dh,0Ah
+        db "  ____                         ___                 ",0Dh,0Ah
+        db " / ___| __ _ _ __ ___   ___   / _ \__   _____ _ __ ",0Dh,0Ah
+        db "| |  _ / _` | '_ ` _ \ / _ \ | | | \ \ / / _ \ '__|",0Dh,0Ah
+        db "| |_| | (_| | | | | | |  __/ | |_| |\ V /  __/ |   ",0Dh,0Ah
+        db " \____|\__,_|_| |_| |_|\___|  \___/  \_/ \___|_|   ",0Dh,0Ah,"$"
 loseMsg  db 0Dh,0Ah,0Dh,0Ah,"FIREWALL BREACHED! UMBRELLA INFECTED.$"
 maskLabel db 0Dh,0Ah,"Current Word: $"
-hintLabel db 0Dh,0Ah,"$"
 newline db 0Dh,0Ah,"$"
+
+; new messages for one-line letter count
+openParen db " (", '$'
+letterCountNum db "0", '$'
+closeText db " letters)$", '$'
 
 .code
 main proc
@@ -64,6 +82,9 @@ main proc
     mov ah,01h
     int 21h
     sub al,'0'
+    mov ah,09h
+    mov dx, OFFSET newline
+    int 21h
 
     cmp al,1
     je level_easy
@@ -96,12 +117,39 @@ level_hard:
 
 ;===================== GAME LOGIC =====================
 start_level:
-    ; print hint label
+    ; print hint (DX points to hint string)
     mov ah,09h
-    mov dx, OFFSET hintLabel
     int 21h
-    ; print the actual hint (DX was set in level selection)
+
+    ; Count letters in the word
+    push si
+    xor cx, cx
+count_letters:
+    mov al, [si]
+    cmp al,'$'
+    je print_letter_count
+    inc cx
+    inc si
+    jmp count_letters
+
+print_letter_count:
+    pop si
+    ; print " ("
     mov ah,09h
+    mov dx, OFFSET openParen
+    int 21h
+
+    ; convert CX to ASCII (assumes <=9 letters)
+    mov al, cl
+    add al, '0'
+    mov letterCountNum, al
+    mov ah,09h
+    mov dx, OFFSET letterCountNum
+    int 21h
+
+    ; print " letters)"
+    mov ah,09h
+    mov dx, OFFSET closeText
     int 21h
 
     ; set tries = 6
@@ -114,7 +162,6 @@ game_loop:
     mov dx, OFFSET maskLabel
     int 21h
 
-    
     mov ah,09h
     mov dx, di
     int 21h
@@ -128,6 +175,11 @@ game_loop:
     mov ah,01h
     int 21h
     mov bl, al
+    
+    ; newline after char
+    mov ah,09h
+    mov dx, OFFSET newline
+    int 21h
 
     ; convert lowercase to uppercase
     cmp bl,'a'
@@ -161,11 +213,10 @@ done_check:
     cmp dl,1
     je correct_guess
 
-    
     mov ah,09h
     mov dx, OFFSET wrongMsg
     int 21h
-    
+
     mov al, [tries]
     dec al
     mov [tries], al
@@ -179,7 +230,6 @@ correct_guess:
     int 21h
 
 cont_game:
-  
     mov bx, di
 check_mask:
     mov al, [bx]
@@ -197,11 +247,19 @@ win_level:
     mov ah,09h
     mov dx, OFFSET winMsg
     int 21h
+    ; print ASCII art
+    mov ah,09h
+    mov dx, OFFSET winArt
+    int 21h
     jmp exit_game
 
 game_over:
     mov ah,09h
     mov dx, OFFSET loseMsg
+    int 21h
+    ; print ASCII art
+    mov ah,09h
+    mov dx, OFFSET loseArt
     int 21h
 
 exit_game:
