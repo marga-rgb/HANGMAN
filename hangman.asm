@@ -44,11 +44,14 @@ reviveMsg db 0Dh,0Ah,"SYSTEM REBOOTING... ROBOT RESTORED!$"
 winMsg   db 0Dh,0Ah,0Dh,0Ah,"SYSTEM RESTORED. UMBRELLA SAFE!$"
 bonusMsg db 0Dh,0Ah,"Bonus points: $"
 loseMsg  db 0Dh,0Ah,0Dh,0Ah,"FIREWALL BREACHED! UMBRELLA INFECTED.$"
+continuePrompt db 0Dh,0Ah,"Press N for Next word, or Q to return to Menu: $"
+pressKeyMsg db 0Dh,0Ah,"[Press any key to continue...]$"
 
 ; ---------- Win / Lose ASCII ----------
 winArt db 0Dh,0Ah
        db "  ____  _   _ _   _ ___ _   _  ",0Dh,0Ah
        db " / ___|| | | | \ | |_ _| \ | | ",0Dh,0Ah
+       db "| |    |  _|  \ \| || ||  \| | ",0Dh,0Ah
        db " \___ \| | | |  \| || ||  \| | ",0Dh,0Ah
        db "  ___) | |_| | |\  || || |\  | ",0Dh,0Ah
        db " |____/ \___/|_| \_|___|_| \_| ",0Dh,0Ah,"$"
@@ -133,6 +136,12 @@ streak db 0
 totalWins dw 0
 totalLosses dw 0
 
+; ---------- Word tracking for sequential play ----------
+currentDifficulty db 0  ; 1=easy, 2=medium, 3=hard
+easyIndex db 0          ; current word index for easy (0-9)
+mediumIndex db 0        ; current word index for medium (0-4)
+hardIndex db 0          ; current word index for hard (0-4)
+
 charBuf db 3
 
 ; ---------- ANSI Color codes ----------
@@ -142,7 +151,7 @@ colorYellow db 27,"[33m$"
 colorRed db 27,"[31m$"
 
 ; ---------- Borders ----------
-borderTop db "============================================================$"
+
 borderBottom db "============================================================$"
 
 ; ============================================================
@@ -153,107 +162,107 @@ borderBottom db "============================================================$"
 
 ; Stage 0 (0 wrong) - Healthy (Green)
 robot0 db 27,"[32m",0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db " ||                ,--.    ,--.                 ||",0Dh,0Ah
-       db " ||               ((O ))--((O))                 ||",0Dh,0Ah
-       db " ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
-       db " ||           | | ||::::::::::|| | |            ||",0Dh,0Ah
-       db " ||           | | ||::::::::::|| | |            ||" ,0Dh,0Ah
-       db " ||             |________________|              ||" ,0Dh,0Ah
-       db " ||          __..-'            `-..__           ||" ,0Dh,0Ah
-       db " ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db "                /______________\               ",0Dh,0Ah
+       db "            _____________________________________________" ,0Dh,0Ah
+       db "           ||                ,--.    ,--.                 ||",0Dh,0Ah
+       db "           ||               ((O ))--((O))                 ||",0Dh,0Ah
+       db "           ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
+       db "           ||           | | ||::::::::::|| | |            ||",0Dh,0Ah
+       db "           ||           | | ||::::::::::|| | |            ||" ,0Dh,0Ah
+       db "           ||             |________________|              ||" ,0Dh,0Ah
+       db "           ||          __..-'            `-..__           ||" ,0Dh,0Ah
+       db "           ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "                          /______________\               ",0Dh,0Ah
        db "$"
 
 ; Stage 1 (1 wrong) - slight glitch (yellow)
 robot1 db 27,"[33m",0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db " ||                ,--.    ,--.                 ||",0Dh,0Ah
-       db " ||               ((O ))--((O ))                ||",0Dh,0Ah
-       db " ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
-       db " ||           | | ||::  .   ::|| | |            ||",0Dh,0Ah
-       db " ||           | | ||::::::::::|| | |            ||" ,0Dh,0Ah
-       db " ||             |________________|              ||" ,0Dh,0Ah
-       db " ||          __..-'            `-..__           ||" ,0Dh,0Ah
-       db " ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db "                /______________\               ",0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "           ||                ,--.    ,--.                 ||",0Dh,0Ah
+       db "           ||               ((O ))--((O ))                ||",0Dh,0Ah
+       db "           ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
+       db "           ||           | | ||::  .   ::|| | |            ||",0Dh,0Ah
+       db "           ||           | | ||::::::::::|| | |            ||" ,0Dh,0Ah
+       db "           ||             |________________|              ||" ,0Dh,0Ah
+       db "           ||          __..-'            `-..__           ||" ,0Dh,0Ah
+       db "           ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "                           /______________\               ",0Dh,0Ah
        db "$"
 
 ; Stage 2 (2 wrongs) - eyes flicker (yellow)
 robot2 db 27,"[33m",0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db " ||                ,--.    ,--.                 ||",0Dh,0Ah
-       db " ||               ((X ))--((O ))                ||",0Dh,0Ah
-       db " ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
-       db " ||           | | ||::  X   ::|| | |            ||",0Dh,0Ah
-       db " ||           | | ||::::::::::|| | |            ||" ,0Dh,0Ah
-       db " ||             |________________|              ||" ,0Dh,0Ah
-       db " ||          __..-'            `-..__           ||" ,0Dh,0Ah
-       db " ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db "                /______________\               ",0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "           ||                ,--.    ,--.                 ||",0Dh,0Ah
+       db "           ||               ((X ))--((O ))                ||",0Dh,0Ah
+       db "           ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
+       db "           ||           | | ||::  X   ::|| | |            ||",0Dh,0Ah
+       db "           ||           | | ||::::::::::|| | |            ||" ,0Dh,0Ah
+       db "           ||             |________________|              ||" ,0Dh,0Ah
+       db "           ||          __..-'            `-..__           ||" ,0Dh,0Ah
+       db "           ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "                          /______________\               ",0Dh,0Ah
        db "$"
 
 ; Stage 3 (3 wrongs) - arm/torso glitch (red)
 robot3 db 27,"[31m",0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db " ||                ,--.    ,--.                 ||",0Dh,0Ah
-       db " ||               ((X ))--((X ))                ||",0Dh,0Ah
-       db " ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
-       db " ||           | | ||::  X   ::|| | |            ||",0Dh,0Ah
-       db " ||           | | ||::####::::|| | |            ||" ,0Dh,0Ah
-       db " ||             |________________|              ||" ,0Dh,0Ah
-       db " ||          __..-'            `-..__           ||" ,0Dh,0Ah
-       db " ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db "                /______________\               ",0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "           ||                ,--.    ,--.                 ||",0Dh,0Ah
+       db "           ||               ((X ))--((X ))                ||",0Dh,0Ah
+       db "           ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
+       db "           ||           | | ||::  X   ::|| | |            ||",0Dh,0Ah
+       db "           ||           | | ||::####::::|| | |            ||" ,0Dh,0Ah
+       db "           ||             |________________|              ||" ,0Dh,0Ah
+       db "           ||          __..-'            `-..__           ||" ,0Dh,0Ah
+       db "           ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "                          /______________\               ",0Dh,0Ah
        db "$"
 
 ; Stage 4 (4 wrongs) - heavy corruption (red)
 robot4 db 27,"[31m",0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db " ||                ,--.    ,--.                 ||",0Dh,0Ah
-       db " ||               ((# ))--((X ))                ||",0Dh,0Ah
-       db " ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
-       db " ||           | | ||::  X   ::|| | |            ||",0Dh,0Ah
-       db " ||           | | ||::######::|| | |            ||" ,0Dh,0Ah
-       db " ||             |________________|              ||" ,0Dh,0Ah
-       db " ||          __..-'            `-..__           ||" ,0Dh,0Ah
-       db " ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db "                /______________\               ",0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "           ||                ,--.    ,--.                 ||",0Dh,0Ah
+       db "           ||               ((# ))--((X ))                ||",0Dh,0Ah
+       db "           ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
+       db "           ||           | | ||::  X   ::|| | |            ||",0Dh,0Ah
+       db "           ||           | | ||::######::|| | |            ||" ,0Dh,0Ah
+       db "           ||             |________________|              ||" ,0Dh,0Ah
+       db "           ||          __..-'            `-..__           ||" ,0Dh,0Ah
+       db "           ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "                          /______________\               ",0Dh,0Ah
        db "$"
 
 ; Stage 5 (5 wrongs) - near-dead (red)
 robot5 db 27,"[31m",0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db " ||                ,--.    ,--.                 ||",0Dh,0Ah
-       db " ||               (# ))--((# ))                 ||",0Dh,0Ah
-       db " ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
-       db " ||           | | ||:#  X   #:|| | |            ||",0Dh,0Ah
-       db " ||           | | ||##########|| | |            ||" ,0Dh,0Ah
-       db " ||             |________________|              ||" ,0Dh,0Ah
-       db " ||          __..-'            `-..__           ||" ,0Dh,0Ah
-       db " ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db "                /______________\               ",0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "           ||                ,--.    ,--.                 ||",0Dh,0Ah
+       db "           ||               (# ))--((# ))                 ||",0Dh,0Ah
+       db "           ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
+       db "           ||           | | ||:#  X   #:|| | |            ||",0Dh,0Ah
+       db "           ||           | | ||##########|| | |            ||" ,0Dh,0Ah
+       db "           ||             |________________|              ||" ,0Dh,0Ah
+       db "           ||          __..-'            `-..__           ||" ,0Dh,0Ah
+       db "           ||     ,\ || | |\______________/| | || /.      ||" ,0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "                           /______________\               ",0Dh,0Ah
        db "$"
 
 ; Stage 6 (6 wrongs) - fully corrupted (red)
 robot6 db 27,"[31m",0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db " ||                ,--.    ,--.                 ||",0Dh,0Ah
-       db " ||               ( X ))--(( X ))               ||",0Dh,0Ah
-       db " ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
-       db " ||           | | ||XX  X   XX|| | |            ||",0Dh,0Ah
-       db " ||           | | ||XXXXXXXXXX|| | |            ||" ,0Dh,0Ah
-       db " ||             |________________|              ||" ,0Dh,0Ah
-       db " ||          __..-'SYSTEM ERROR `-..__          ||" ,0Dh,0Ah
-       db " ||       .-| : .--CORRUPTED!!!!--. : |-.       ||" ,0Dh,0Ah
-       db "   _____________________________________________" ,0Dh,0Ah
-       db "                /______________\               ",0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "           ||                ,--.    ,--.                 ||",0Dh,0Ah
+       db "           ||               ( X ))--(( X ))               ||",0Dh,0Ah
+       db "           ||             ,'_`--'____`--'_`.              ||",0Dh,0Ah
+       db "           ||           | | ||XX  X   XX|| | |            ||",0Dh,0Ah
+       db "           ||           | | ||XXXXXXXXXX|| | |            ||" ,0Dh,0Ah
+       db "           ||             |________________|              ||" ,0Dh,0Ah
+       db "           ||          __..-'SYSTEM ERROR `-..__          ||" ,0Dh,0Ah
+       db "           ||       .-| : .--CORRUPTED!!!!--. : |-.       ||" ,0Dh,0Ah
+       db "             _____________________________________________" ,0Dh,0Ah
+       db "                          /______________\               ",0Dh,0Ah
        db "$"
 
 
@@ -349,97 +358,129 @@ menu_quit:
     ret
 main_menu endp
 
-; ---------- Random index via INT 1Ah ----------
-get_random_index proc
-    push cx
-    push bx
-    mov ah,0
-    int 1Ah
-    mov bl, dl
-    mov cl, al   ; input pool size
-    cmp cl,0
-    je gi_zero
-gi_mod_loop:
-    cmp bl, cl
-    jb gi_done
-    sub bl, cl
-    jmp gi_mod_loop
-gi_done:
-    mov al, bl
-    pop bx
-    pop cx
-    ret
-gi_zero:
-    xor al, al
-    pop bx
-    pop cx
-    ret
-get_random_index endp
-
-; ---------- Select pointer from table ----------
-; inputs: BX=index, SI=offset table
-; output: DX=pointer to string
-select_from_table proc
-    push ax
-    push si
-    mov ax, bx
-    shl ax,1
-    add si, ax
-    mov dx, [si]
-    pop si
-    pop ax
-    ret
-select_from_table endp
+; ---------- (Old random procedures removed - now using sequential selection) ----------
 
 ; ---------- Start easy ----------
 start_easy proc
-    mov al,10
-    call get_random_index
+easy_loop:
+    ; Set current difficulty
+    mov byte ptr [currentDifficulty], 1
+    
+    ; Get current word index
+    mov al, [easyIndex]
+    xor ah, ah
     mov bx, ax
+    shl bx, 1           ; multiply by 2 for word pointer
+    
+    ; Select word from table
     mov si, OFFSET easyPtrs
-    call select_from_table
+    add si, bx
+    mov dx, [si]
     mov wordPtr, dx
+    
+    ; Select hint from table
     mov si, OFFSET easyHintsPtrs
-    call select_from_table
+    add si, bx
+    mov dx, [si]
     mov hintPtr, dx
+    
+    ; Setup game state
     mov byte ptr [tries], 6
-    mov byte ptr [hintUsed], 1
+    mov byte ptr [hintUsed], 0
+    
+    ; Increment index for next word (wrap at 10)
+    mov al, [easyIndex]
+    inc al
+    cmp al, 10
+    jl easy_no_wrap
+    mov al, 0           ; wrap to 0
+easy_no_wrap:
+    mov [easyIndex], al
+    
     call setup_round
-    ret
+    ret                 ; Return to menu when game ends
 start_easy endp
 
 ; ---------- Start medium ----------
 start_medium proc
-    mov al,5
-    call get_random_index
+medium_loop:
+    ; Set current difficulty
+    mov byte ptr [currentDifficulty], 2
+    
+    ; Get current word index
+    mov al, [mediumIndex]
+    xor ah, ah
     mov bx, ax
+    shl bx, 1           ; multiply by 2 for word pointer
+    
+    ; Select word from table
     mov si, OFFSET mediumPtrs
-    call select_from_table
+    add si, bx
+    mov dx, [si]
     mov wordPtr, dx
+    
+    ; Select hint from table
     mov si, OFFSET mediumHintsPtrs
-    call select_from_table
+    add si, bx
+    mov dx, [si]
     mov hintPtr, dx
+    
+    ; Setup game state
     mov byte ptr [tries], 6
     mov byte ptr [hintUsed], 0
+    
+    ; Increment index for next word (wrap at 5)
+    mov al, [mediumIndex]
+    inc al
+    cmp al, 5
+    jl medium_no_wrap
+    mov al, 0           ; wrap to 0
+medium_no_wrap:
+    mov [mediumIndex], al
+    
     call setup_round
-    ret
+    ret                 ; Return to menu when game ends
 start_medium endp
 
 ; ---------- Start hard ----------
 start_hard proc
-    mov al,5
-    call get_random_index
+hard_loop:
+    ; Set current difficulty
+    mov byte ptr [currentDifficulty], 3
+    
+    ; Get current word index
+    mov al, [hardIndex]
+    xor ah, ah
     mov bx, ax
+    shl bx, 1           ; multiply by 2 for word pointer
+    
+    ; Select word from table
     mov si, OFFSET hardPtrs
-    call select_from_table
+    add si, bx
+    mov dx, [si]
     mov wordPtr, dx
+    
+    ; Select hint from table
     mov si, OFFSET hardHintsPtrs
-    call select_from_table
+    add si, bx
+    mov dx, [si]
     mov hintPtr, dx
+    
+    ; Setup game state
     mov byte ptr [tries], 6
     mov byte ptr [hintUsed], 0
+    
+    ; Increment index for next word (wrap at 5)
+    mov al, [hardIndex]
+    inc al
+    cmp al, 5
+    jl hard_no_wrap
+    mov al, 0           ; wrap to 0
+hard_no_wrap:
+    mov [hardIndex], al
+    
     call setup_round
-    ret
+    ret                 ; Return to menu when game ends
 start_hard endp
 
 ; ---------- Setup round ----------
@@ -470,21 +511,7 @@ maskloop:
 maskdone:
     mov byte ptr [di], '$'
 
-    ; if easy, show hint
-    cmp byte ptr [hintUsed],1
-    je skip_hint_check
-    jmp skip_hint
-skip_hint_check:
-    mov ah,09h
-    mov dx, OFFSET hintLabel
-    int 21h
-    mov ah,09h
-    mov dx, hintPtr
-    int 21h
-    mov ah,09h
-    mov dx, OFFSET newline
-    int 21h
-skip_hint:
+    ; Hint will be displayed in game_loop after robot
     call game_loop
     
     pop si
@@ -554,13 +581,7 @@ border_red:
     int 21h
     
 display_border:
-    ; display top border
-    mov ah, 09h
-    mov dx, OFFSET borderTop
-    int 21h
-    mov dx, OFFSET newline
-    int 21h
-    
+    ; No top border - removed by user
     pop dx
     pop ax
     ret
@@ -685,13 +706,50 @@ print_number endp
 ; ---------- Game loop ----------
 game_loop proc
 game_start:
+    ; Clear screen at start of each turn
+    mov ah, 00h
+    mov al, 03h
+    int 10h
+    
     ; show colored border
     mov al, [tries]
     call show_border
     
+    ; show score and streak (MOVED TO TOP)
+    mov ah,09h
+    mov dx, OFFSET scoreLabel
+    int 21h
+    mov ax, [score]
+    call print_number
+    mov ah,09h
+    mov dx, OFFSET streakLabel
+    int 21h
+    mov al, [streak]
+    xor ah, ah
+    call print_number
+    mov ah,09h
+    mov dx, OFFSET newline
+    int 21h
+    
     ; show robot according to current tries
     mov al, [tries]
     call show_robot_stage
+    
+    ; show hint if Easy mode (MOVED AFTER ROBOT)
+    cmp byte ptr [currentDifficulty], 1
+    jne skip_hint_display   ; skip if not Easy mode
+    cmp byte ptr [hintUsed], 1
+    je skip_hint_display    ; skip if already used
+    mov ah,09h
+    mov dx, OFFSET hintLabel
+    int 21h
+    mov ah,09h
+    mov dx, hintPtr
+    int 21h
+    mov ah,09h
+    mov dx, OFFSET newline
+    int 21h
+skip_hint_display:
 
     ; print mask
     mov ah,09h
@@ -716,19 +774,6 @@ game_start:
     mov ah,09h
     mov dx, OFFSET newline
     int 21h
-
-    ; show score and streak
-    mov ah,09h
-    mov dx, OFFSET scoreLabel
-    int 21h
-    mov ax, [score]
-    call print_number
-    mov ah,09h
-    mov dx, OFFSET streakLabel
-    int 21h
-    mov al, [streak]
-    xor ah, ah
-    call print_number
 
     ; guessed letters
     mov ah,09h
@@ -814,8 +859,11 @@ give_hint:
     mov dx, hintPtr
     int 21h
     mov ah,09h
-    mov dx, OFFSET newline
+    mov dx, OFFSET pressKeyMsg
     int 21h
+    mov ah,01h
+    int 21h  ; wait for keypress
+    
     mov byte ptr [hintUsed],1
     jmp game_start
 
@@ -985,6 +1033,50 @@ win:
     mov ah,09h
     mov dx, OFFSET newline
     int 21h
+    
+    ; Ask user: Next or Quit?
+ask_continue:
+    mov ah,09h
+    mov dx, OFFSET continuePrompt
+    int 21h
+    
+    mov ah,01h
+    int 21h
+    mov ah,09h
+    mov dx, OFFSET newline
+    int 21h
+    
+    ; Check for N (next) or Q (quit)
+    cmp al,'N'
+    je do_continue
+    cmp al,'n'
+    je do_continue
+    cmp al,'Q'
+    je do_quit
+    cmp al,'q'
+    je do_quit
+    jmp ask_continue        ; invalid input, ask again
+    
+do_continue:
+    ; Continue to next word based on currentDifficulty
+    mov al, [currentDifficulty]
+    cmp al, 1
+    je continue_easy
+    cmp al, 2
+    je continue_medium
+    cmp al, 3
+    je continue_hard
+    ret                     ; fallback
+    
+continue_easy:
+    jmp easy_loop
+continue_medium:
+    jmp medium_loop
+continue_hard:
+    jmp hard_loop
+    
+do_quit:
+    ; Return to menu (usedWords persist)
     ret
 
 lost:
