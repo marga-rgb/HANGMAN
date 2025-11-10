@@ -31,12 +31,18 @@ maskLabel db 0Dh,0Ah,"Current Word: $"
 guessedLabel db 0Dh,0Ah,"Guessed letters: $"
 triesLabel db 0Dh,0Ah,"Remaining tries: $"
 hintLabel db 0Dh,0Ah,"Hint: $"
+scoreLabel db 0Dh,0Ah,"Score: $"
+streakLabel db " | Streak: $"
+statsLabel db 0Dh,0Ah,"Wins: $"
+lossesLabel db " | Losses: $"
 
 guessPrompt db 0Dh,0Ah,"Enter a letter (or '?' for hint): $"
 alreadyMsg db 0Dh,0Ah,"You already guessed that letter!$"
 wrongMsg db 0Dh,0Ah,"Incorrect! System integrity weakening...$"
-rightMsg db 0Dh,0Ah,"Node repaired! Good work.$"
+rightMsg db 0Dh,0Ah,"Node repaired! +10 points!$"
+reviveMsg db 0Dh,0Ah,"SYSTEM REBOOTING... ROBOT RESTORED!$"
 winMsg   db 0Dh,0Ah,0Dh,0Ah,"SYSTEM RESTORED. UMBRELLA SAFE!$"
+bonusMsg db 0Dh,0Ah,"Bonus points: $"
 loseMsg  db 0Dh,0Ah,0Dh,0Ah,"FIREWALL BREACHED! UMBRELLA INFECTED.$"
 
 ; ---------- Win / Lose ASCII ----------
@@ -121,7 +127,23 @@ guessCount db 0
 tries db 6
 hintUsed db 0
 
+; ---------- Game stats ----------
+score dw 0
+streak db 0
+totalWins dw 0
+totalLosses dw 0
+
 charBuf db 3
+
+; ---------- ANSI Color codes ----------
+colorReset db 27,"[0m$"
+colorGreen db 27,"[32m$"
+colorYellow db 27,"[33m$"
+colorRed db 27,"[31m$"
+
+; ---------- Borders ----------
+borderTop db "============================================================$"
+borderBottom db "============================================================$"
 
 ; ============================================================
 ; ROBOT STAGES - Full body, one definition each (ANSI colors embedded)
@@ -396,6 +418,21 @@ show_title endp
 ; ---------- Menu ----------
 main_menu proc
 menu_loop:
+    ; display stats
+    mov ah,09h
+    mov dx, OFFSET statsLabel
+    int 21h
+    mov ax, [totalWins]
+    call print_number
+    mov ah,09h
+    mov dx, OFFSET lossesLabel
+    int 21h
+    mov ax, [totalLosses]
+    call print_number
+    mov ah,09h
+    mov dx, OFFSET newline
+    int 21h
+    
     mov ah,09h
     mov dx, OFFSET menu
     int 21h
@@ -405,16 +442,27 @@ menu_loop:
     mov dx, OFFSET newline
     int 21h
     cmp al,'1'
-    je start_easy
+    je do_easy
     cmp al,'2'
-    je start_medium
+    je do_medium
     cmp al,'3'
-    je start_hard
+    je do_hard
     cmp al,'Q'
     je menu_quit
     cmp al,'q'
     je menu_quit
     jmp menu_loop
+
+do_easy:
+    call start_easy
+    jmp menu_loop
+do_medium:
+    call start_medium
+    jmp menu_loop
+do_hard:
+    call start_hard
+    jmp menu_loop
+
 menu_quit:
     ret
 main_menu endp
@@ -542,7 +590,9 @@ maskdone:
 
     ; if easy, show hint
     cmp byte ptr [hintUsed],1
-    jne skip_hint
+    je skip_hint_check
+    jmp skip_hint
+skip_hint_check:
     mov ah,09h
     mov dx, OFFSET hintLabel
     int 21h
@@ -591,9 +641,172 @@ show_robot_stage proc
     ret
 show_robot_stage endp
 
+; ---------- Display colored border ----------
+; Input: AL = current tries (0..6)
+show_border proc
+    push ax
+    push dx
+    
+    ; determine color based on tries
+    cmp al, 5
+    jae border_green    ; 5-6 tries = green
+    cmp al, 3
+    jae border_yellow   ; 3-4 tries = yellow
+    jmp border_red      ; 0-2 tries = red
+    
+border_green:
+    mov ah, 09h
+    mov dx, OFFSET colorGreen
+    int 21h
+    jmp display_border
+    
+border_yellow:
+    mov ah, 09h
+    mov dx, OFFSET colorYellow
+    int 21h
+    jmp display_border
+    
+border_red:
+    mov ah, 09h
+    mov dx, OFFSET colorRed
+    int 21h
+    
+display_border:
+    ; display top border
+    mov ah, 09h
+    mov dx, OFFSET borderTop
+    int 21h
+    mov dx, OFFSET newline
+    int 21h
+    
+    pop dx
+    pop ax
+    ret
+show_border endp
+
+; ---------- Close border ----------
+close_border proc
+    push ax
+    push dx
+    
+    ; get current tries for color
+    mov al, [tries]
+    cmp al, 5
+    jae close_green
+    cmp al, 3
+    jae close_yellow
+    
+    mov ah, 09h
+    mov dx, OFFSET colorRed
+    int 21h
+    jmp do_close
+    
+close_yellow:
+    mov ah, 09h
+    mov dx, OFFSET colorYellow
+    int 21h
+    jmp do_close
+    
+close_green:
+    mov ah, 09h
+    mov dx, OFFSET colorGreen
+    int 21h
+    
+do_close:
+    mov ah, 09h
+    mov dx, OFFSET borderBottom
+    int 21h
+    mov dx, OFFSET colorReset
+    int 21h
+    mov dx, OFFSET newline
+    int 21h
+    
+    pop dx
+    pop ax
+    ret
+close_border endp
+
+; ---------- Sound effects ----------
+play_beep proc
+    ; Input: AL = frequency (1=low, 2=mid, 3=high)
+    push ax
+    push bx
+    push cx
+    
+    cmp al, 1
+    je beep_low
+    cmp al, 2
+    je beep_mid
+    jmp beep_high
+    
+beep_low:
+    mov bx, 800    ; lower frequency
+    jmp do_beep
+beep_mid:
+    mov bx, 1200   ; mid frequency
+    jmp do_beep
+beep_high:
+    mov bx, 2000   ; higher frequency
+    
+do_beep:
+    in al, 61h
+    or al, 00000011b
+    out 61h, al
+    
+    mov cx, bx
+beep_loop:
+    loop beep_loop
+    
+    in al, 61h
+    and al, 11111100b
+    out 61h, al
+    
+    pop cx
+    pop bx
+    pop ax
+    ret
+play_beep endp
+
+; ---------- Print number ----------
+; Input: AX = number to print
+print_number proc
+    push ax
+    push bx
+    push cx
+    push dx
+    
+    mov cx, 0
+    mov bx, 10
+    
+divide_loop:
+    xor dx, dx
+    div bx
+    push dx
+    inc cx
+    cmp ax, 0
+    jne divide_loop
+    
+print_digits:
+    pop dx
+    add dl, '0'
+    mov ah, 02h
+    int 21h
+    loop print_digits
+    
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+print_number endp
+
 ; ---------- Game loop ----------
 game_loop proc
 game_start:
+    ; show colored border
+    mov al, [tries]
+    call show_border
+    
     ; show robot according to current tries
     mov al, [tries]
     call show_robot_stage
@@ -621,6 +834,19 @@ game_start:
     mov ah,09h
     mov dx, OFFSET newline
     int 21h
+
+    ; show score and streak
+    mov ah,09h
+    mov dx, OFFSET scoreLabel
+    int 21h
+    mov ax, [score]
+    call print_number
+    mov ah,09h
+    mov dx, OFFSET streakLabel
+    int 21h
+    mov al, [streak]
+    xor ah, ah
+    call print_number
 
     ; guessed letters
     mov ah,09h
@@ -662,6 +888,9 @@ post_guessed:
     mov ah,09h
     mov dx, OFFSET newline
     int 21h
+    
+    ; close colored border
+    call close_border
 
     ; prompt
     mov ah,09h
@@ -670,26 +899,32 @@ post_guessed:
 
     mov ah,01h
     int 21h
-    mov dl, al
+    mov bl, al          ; save character in BL instead
     mov ah,09h
     mov dx, OFFSET newline
     int 21h
 
     ; uppercase
-    mov al, dl
+    mov al, bl
     cmp al,'a'
     jb skip_case
     cmp al,'z'
     ja skip_case
     sub al,32
-    mov dl, al
+    mov bl, al      ; save uppercase character back to BL
 skip_case:
 
     ; check hint request '?'
-    cmp dl,'?'
-    jne not_hint
+    cmp bl,'?'
+    je check_hint
+    jmp not_hint
+    
+check_hint:
     cmp byte ptr [hintUsed],0
-    jne hint_used
+    je give_hint
+    jmp hint_used
+
+give_hint:
     mov ah,09h
     mov dx, OFFSET hintLabel
     int 21h
@@ -706,12 +941,15 @@ hint_used:
     jmp game_start
 
 not_hint:
-    mov al, dl
+    mov al, bl
     cmp al,'A'
-    jb invalid_input
+    jb skip_to_invalid
     cmp al,'Z'
-    ja invalid_input
-
+    ja skip_to_invalid
+    jmp valid_letter
+skip_to_invalid:
+    jmp game_start
+valid_letter:
     ; repeated check
     mov cl, [guessCount]
     mov ch, 0
@@ -721,7 +959,7 @@ not_hint:
 
 repeat_loop:
     mov al, [guessedLetters+si]
-    cmp al, dl
+    cmp al, bl
     je already
     inc si
     cmp si, cx
@@ -739,21 +977,22 @@ not_repeat:
     mov al, [guessCount]
     xor ah, ah
     mov si, ax
-    mov byte ptr [guessedLetters+si], dl
+    mov byte ptr [guessedLetters+si], bl
     inc byte ptr [guessCount]
 
     ; search and reveal
+    mov dl, bl          ; save character in DL for comparison
     mov si, wordPtr
     lea di, maskBuf
-    mov bl, 0
+    mov bl, 0           ; BL = flag (0 = not found, 1 = found)
 scan_loop:
     mov al, [si]
     cmp al,'$'
     je scan_done
-    cmp al, dl
+    cmp al, dl          ; compare with saved character in DL
     jne scan_next
     mov byte ptr [di], al
-    mov bl, 1
+    mov bl, 1           ; mark as found
 scan_next:
     inc si
     inc di
@@ -762,20 +1001,34 @@ scan_done:
     cmp bl,1
     je right
     ; wrong
+    mov al, 1          ; play low beep
+    call play_beep
     mov ah,09h
     mov dx, OFFSET wrongMsg
     int 21h
+    mov byte ptr [streak], 0   ; reset streak
     mov al, [tries]
     dec al
     mov byte ptr [tries], al
     cmp al, 0
-    jle lost
+    jle jump_to_lost
     jmp game_start
+    
+jump_to_lost:
+    jmp lost
 
 right:
+    mov al, 3          ; play high beep
+    call play_beep
     mov ah,09h
     mov dx, OFFSET rightMsg
     int 21h
+    ; add points
+    mov ax, [score]
+    add ax, 10
+    mov [score], ax
+    ; increase streak
+    inc byte ptr [streak]
 
     ; check if mask complete
     lea si, maskBuf
@@ -791,22 +1044,71 @@ cont:
     jmp game_start
 
 win:
+    mov al, 3          ; victory sound
+    call play_beep
+    call play_beep
+    
+    ; RESET ROBOT COLOR TO GREEN!
+    mov ah,09h
+    mov dx, OFFSET colorGreen
+    int 21h
+    mov ah,09h
+    mov dx, OFFSET reviveMsg
+    int 21h
+    
+    ; show healthy robot
+    mov al, 6          ; full health
+    call show_robot_stage
+    
+    ; calculate bonus (tries * 20)
+    mov al, [tries]
+    xor ah, ah
+    mov bx, 20
+    mul bx
+    add [score], ax
+    
     mov ah,09h
     mov dx, OFFSET winMsg
     int 21h
     mov ah,09h
+    mov dx, OFFSET bonusMsg
+    int 21h
+    mov al, [tries]
+    xor ah, ah
+    mov bx, 20
+    mul bx
+    call print_number
+    mov ah,09h
     mov dx, OFFSET winArt
+    int 21h
+    
+    ; update stats
+    inc word ptr [totalWins]
+    
+    mov ah,09h
+    mov dx, OFFSET statsLabel
+    int 21h
+    mov ax, [totalWins]
+    call print_number
+    mov ah,09h
+    mov dx, OFFSET lossesLabel
+    int 21h
+    mov ax, [totalLosses]
+    call print_number
+    
+    ; reset colors
+    mov ah,09h
+    mov dx, OFFSET colorReset
     int 21h
     mov ah,09h
     mov dx, OFFSET newline
     int 21h
-    call main_menu
     ret
 
-invalid_input:
-    jmp game_start
-
 lost:
+    mov al, 1          ; defeat sound
+    call play_beep
+    
     ; show final corrupted robot and lose text
     mov ah,09h
     mov dx, OFFSET loseMsg
@@ -816,10 +1118,28 @@ lost:
     mov ah,09h
     mov dx, OFFSET loseArt
     int 21h
+    
+    ; update stats
+    inc word ptr [totalLosses]
+    
+    mov ah,09h
+    mov dx, OFFSET statsLabel
+    int 21h
+    mov ax, [totalWins]
+    call print_number
+    mov ah,09h
+    mov dx, OFFSET lossesLabel
+    int 21h
+    mov ax, [totalLosses]
+    call print_number
+    
+    ; reset colors
+    mov ah,09h
+    mov dx, OFFSET colorReset
+    int 21h
     mov ah,09h
     mov dx, OFFSET newline
     int 21h
-    call main_menu
     ret
 
 game_loop endp
