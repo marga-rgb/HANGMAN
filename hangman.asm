@@ -1,22 +1,31 @@
-; ==========================================================
-; CTRL-ALT-DEFEAT - Hangman style game with ROBOT CORRUPTION
-; TASM / MASM compatible (16-bit DOS)
-; Modified: fixed jump out of range errors
-; ==========================================================
-
+;===========================================================
+; Group 3:
+; Name: Barnuevo, Charles Lawrence
+; Bueno, Jose Emmanuel
+; Garcia, Christen Nicole 
+; Ridao, Sean Ulrich
+; Rosales, Azeckah Claire
+; Santos, Ferdinan Alexandr 
+; Solomon, Margarette Ashly
+; Description: "Ctrl-Alt-Defeat" Hangman-style game 
+; 
+;===========================================================
 .model small
 .stack 100h
 .data
 
 ; ---------- UI & Strings ----------
 titleArt db 0Dh,0Ah
-         db "  ____  _______ _   _    _    _    _   _ _____  ______ ",0Dh,0Ah
-         db " / ___|| ____\ \ | |  / \  | |  | | | | |  ___||  ____|",0Dh,0Ah
-         db "| |    |  _|  \ \| | / _ \ | |  | | | | | |_   | |__   ",0Dh,0Ah
-         db "| |___ | |___  \   |/ ___ \| |__| |_| |_|  _|  |  __|  ",0Dh,0Ah
-         db " \____||_____|  |_/_/   \_\_____\___/|_|_|    |_|     ",0Dh,0Ah
-         db "                     CTRL - ALT - DEFEAT               ",0Dh,0Ah
-         db "                 A HANGMAN ADVENTURE                   ",0Dh,0Ah
+         db "   ???????        ??????        ??????? ",0Dh,0Ah
+         db "  ?????????      ????????      ?????????",0Dh,0Ah
+         db "  ???            ????????      ???   ???",0Dh,0Ah
+         db "  ???            ????????      ???   ???",0Dh,0Ah
+         db "  ????????       ???  ???      ????????",0Dh,0Ah
+         db "   ???????       ???  ???      ??????? ",0Dh,0Ah
+         db "========================================",0Dh,0Ah
+         db "     C T R L  -  A L T  -  D E F E A T  ",0Dh,0Ah
+         db "========================================",0Dh,0Ah,
+         db "          A HANGMAN ADVENTURE                   ",0Dh,0Ah
          db 0Dh,0Ah,"Press Z to Continue...$"
 
 menu db 0Dh,0Ah,"Choose difficulty:",0Dh,0Ah
@@ -49,20 +58,14 @@ pressKeyMsg db 0Dh,0Ah,"[Press any key to continue...]$"
 
 ; ---------- Win / Lose ASCII ----------
 winArt db 0Dh,0Ah
-       db "  ____  _   _ _   _ ___ _   _  ",0Dh,0Ah
-       db " / ___|| | | | \ | |_ _| \ | | ",0Dh,0Ah
-       db "| |    |  _|  \ \| || ||  \| | ",0Dh,0Ah
-       db " \___ \| | | |  \| || ||  \| | ",0Dh,0Ah
-       db "  ___) | |_| | |\  || || |\  | ",0Dh,0Ah
-       db " |____/ \___/|_| \_|___|_| \_| ",0Dh,0Ah,"$"
+       db " #####  #     #  #####   #####  #######  #####   #####  ",0Dh,0Ah
+       db "#     # #     # #     # #     # #       #     # #     # ",0Dh,0Ah
+       db "#       #     # #       #       #       #       #       ",0Dh,0Ah
+       db " #####  #     # #       #       #####    #####   #####  ",0Dh,0Ah
+       db "      # #     # #       #       #             #       # ",0Dh,0Ah
+       db "#     # #     # #     # #     # #       #     # #     # ",0Dh,0Ah
+       db " #####   #####   #####   #####  #######  #####   #####   ",0Dh,0Ah,"$"
 
-loseArt db 0Dh,0Ah
-       db "  _                      _     _ ",0Dh,0Ah
-       db " | |    ___   __ _  __ _| | __| |",0Dh,0Ah
-       db " | |   / _ \ / _` |/ _` | |/ _` |",0Dh,0Ah
-       db " | |__| (_) | (_| | (_| | | (_| |",0Dh,0Ah
-       db " |_____\___/ \__, |\__,_|_|\__,_|",0Dh,0Ah
-       db "             |___/                ",0Dh,0Ah,"$"
 
 ; ---------- Word pools & hints ----------
 easy1   db "CODE$"
@@ -153,12 +156,6 @@ colorRed db 27,"[31m$"
 ; ---------- Borders ----------
 
 borderBottom db "============================================================$"
-
-; ============================================================
-; ROBOT STAGES - Full body, one definition each (ANSI colors embedded)
-; robotN = N wrong guesses (tries = 6 - N)
-; NOTE: color is NOT reset at the end
-; ============================================================
 
 ; Stage 0 (0 wrong) - Healthy (Green)
 robot0 db 27,"[32m",0Dh,0Ah
@@ -358,7 +355,6 @@ menu_quit:
     ret
 main_menu endp
 
-; ---------- (Old random procedures removed - now using sequential selection) ----------
 
 ; ---------- Start easy ----------
 start_easy proc
@@ -715,7 +711,7 @@ game_start:
     mov al, [tries]
     call show_border
     
-    ; show score and streak (MOVED TO TOP)
+    ; show score and streak 
     mov ah,09h
     mov dx, OFFSET scoreLabel
     int 21h
@@ -735,11 +731,9 @@ game_start:
     mov al, [tries]
     call show_robot_stage
     
-    ; show hint if Easy mode (MOVED AFTER ROBOT)
-    cmp byte ptr [currentDifficulty], 1
-    jne skip_hint_display   ; skip if not Easy mode
+    ; show hint only if requested
     cmp byte ptr [hintUsed], 1
-    je skip_hint_display    ; skip if already used
+    jne skip_hint_display
     mov ah,09h
     mov dx, OFFSET hintLabel
     int 21h
@@ -826,7 +820,7 @@ post_guessed:
 
     mov ah,01h
     int 21h
-    mov bl, al          ; save character in BL instead
+    mov bl, al          
     mov ah,09h
     mov dx, OFFSET newline
     int 21h
@@ -911,18 +905,18 @@ not_repeat:
     inc byte ptr [guessCount]
 
     ; search and reveal
-    mov dl, bl          ; save character in DL for comparison
+    mov dl, bl          
     mov si, wordPtr
     lea di, maskBuf
-    mov bl, 0           ; BL = flag (0 = not found, 1 = found)
+    mov bl, 0           
 scan_loop:
     mov al, [si]
     cmp al,'$'
     je scan_done
-    cmp al, dl          ; compare with saved character in DL
+    cmp al, dl          
     jne scan_next
     mov byte ptr [di], al
-    mov bl, 1           ; mark as found
+    mov bl, 1          
 scan_next:
     inc si
     inc di
@@ -1089,10 +1083,7 @@ lost:
     int 21h
     mov al, 0
     call show_robot_stage ; will show stage 6 because tries=0 -> idx=6
-    mov ah,09h
-    mov dx, OFFSET loseArt
-    int 21h
-    
+  
     ; update stats
     inc word ptr [totalLosses]
     
